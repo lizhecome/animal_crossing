@@ -1,0 +1,105 @@
+module animal_crossing::nft {
+
+    use sui::balance::{Self, Balance};
+    use sui::coin::{Coin};
+    use sui::sui::SUI;
+
+    /// 银行结构（可以存储SUI和NFT）
+    public struct Bank has key {
+        id: UID,
+        sui_balance: Balance<SUI>,  // 使用Balance类型存储SUI
+    }
+
+    /// 濒危动物基础信息结构
+    public struct AnimalInfo has key, store {
+        id: UID,                      // 唯一标识符
+        species: vector<u8>,          // 动物种类
+        habitat: vector<u8>,          // 栖息地
+        status: vector<u8>,           // 濒危状态
+        image_url: vector<u8>,        // 图片URL
+    }
+
+    /// 动物NFT结构
+    public struct AnimalNFT has key, store {
+        id: UID,                      // NFT的唯一标识符
+        name: vector<u8>,             // 动物名称
+        species: vector<u8>,          // 动物种类
+        habitat: vector<u8>,          // 栖息地
+        status: vector<u8>,           // 濒危状态
+        adopted_by: address,          // 认养者地址
+        image_url: vector<u8>,        // 图片URL
+    }
+
+    // 定义管理员能力
+    public struct AdminCap has key{
+        id: UID
+    }
+
+    /// 初始化合约的函数
+    fun init(ctx: &mut TxContext) {
+        let admin = Admin { address: admin_address };
+        let bank = Bank { treasury: Treasury::new(ctx) };
+    }
+
+    /// 添加濒危动物信息（仅管理员调用）
+    public entry fun add_animal_info(
+        admin: &Admin,
+        species: vector<u8>, 
+        habitat: vector<u8>, 
+        status: vector<u8>, 
+        image_url: vector<u8>, 
+        ctx: &mut TxContext
+    ): AnimalInfo {
+        assert!(ctx.sender() == admin.address, "Only the admin can add animal info!");
+        AnimalInfo {
+            id: UID::new(ctx),
+            species,
+            habitat,
+            status,
+            image_url,
+        }
+    }
+
+    /// 用户直接购买并铸造NFT
+    public entry fun purchase_and_mint_nft(
+        bank: &mut Bank,
+        animal_info: &AnimalInfo,
+        payment: Coin<u64>,
+        ctx: &mut TxContext
+    ): AnimalNFT {
+        // 验证支付金额
+        assert!(balance::value(&payment) == 1, "NFT price is exactly 1 SUI!");
+
+        // 将支付金额存入银行
+        Treasury::deposit(&mut bank.treasury, payment);
+
+        // 创建NFT
+        let nft = AnimalNFT {
+            id: UID::new(ctx),
+            name: vector::empty(), // 动物名称可以由用户自定义
+            species: animal_info.species,
+            habitat: animal_info.habitat,
+            status: animal_info.status,
+            adopted_by: ctx.sender(),
+            image_url: animal_info.image_url,
+        };
+
+        nft
+    }
+
+    /// 提取银行中的资金（仅管理员调用）
+    public entry fun withdraw_funds(
+        bank: &mut Bank,
+        admin: &Admin,
+        amount: u64,
+        ctx: &mut TxContext
+    ): Coin<u64> {
+        assert!(ctx.sender() == admin.address, "Only the admin can withdraw funds!");
+        Treasury::withdraw(&mut bank.treasury, amount, ctx)
+    }
+
+    /// 查询银行余额
+    public fun get_bank_balance(bank: &Bank): u64 {
+        Treasury::balance(&bank.treasury)
+    }
+}
