@@ -18,10 +18,14 @@ use lending_core::storage::{Storage};
 use sui::linked_table::{Self,LinkedTable};
 use oracle::oracle::{PriceOracle};
 
+// Error code indicating that the NFT price must be exactly equal to the specified WILD_COIN amount.
 const ERR_NFT_PRICE_IS_EXACTLY_NFT_PRICE_WILD_COIN: u64 = 5;
+
+// Error code indicating that the specified key does not exist in the table.
 const ERR_KEY_DOES_NOT_EXIST: u64 = 1;
 
-const NFT_PRICE: u64 = 10;
+// The price of the NFT in WILD_COIN, set to 1 billion (10^9) WILD_COIN.
+const NFT_PRICE: u64 = 1000_000_000;
 
 
 public struct WILD_NFT has drop {}
@@ -58,8 +62,6 @@ public struct AnimalNFT has key, store {
 public struct NFTAdminCap has key {
     id: UID,
 }
-
-
 
 /// Record structure for minting NFTs
 /// Contains a UID as a unique identifier
@@ -184,6 +186,11 @@ public fun update_animal_info(
     animal_info.image_url = image_url;
 }
 
+
+/// This method is used to purchase an NFT using the input WILD_COIN.
+/// The input WILD_COIN must be equal to NFT_PRICE.
+/// This method will withdraw an equivalent amount of SUI from the vault and deposit it into the lending platform.
+/// At the same time, the input WILD_COIN will be deposited into the vault.
 /// https://github.com/naviprotocol/navi-sdk/blob/692a001f174a758544accfa05459f1edc8366c89/src/address.ts#L58
 /// Fund function to purchase NFT using inputcoin: Coin<WILD_COIN>, priced at NFT_PRICE
 public fun fund_and_purchase_nft(
@@ -245,6 +252,11 @@ public fun fund_and_purchase_nft(
 }
 
 
+// This function allows the user to abandon the adoption of an NFT.
+// It emits an event to notify that the NFT has been abandoned.
+// The NFT is removed from the minting record.
+// The function also withdraws the equivalent amount of SUI from the lending platform.
+// Finally, the NFT is destroyed.
 public fun abandon_adoption(
     nft: AnimalNFT,
     vault: &mut WildVault,
@@ -315,6 +327,19 @@ public struct Nft_weight has store,drop{
     time_weight:u64
 }
 
+
+/// Calculates the airdrop distribution based on the status and time weights of NFTs.
+/// 
+/// This function iterates through the minting records to collect all NFT data, 
+/// calculates the total weights based on the endangered status and the time held, 
+/// and then determines the airdrop distribution proportionally.
+///
+/// @param _admin_cap The admin capability for the NFT system.
+/// @param record The minting record containing NFT data.
+/// @param animals The collection of animal information.
+/// @param vault The vault containing the WILD_COIN balance.
+/// @param clock The clock to get the current timestamp.
+/// @param ctx The transaction context.
 public fun calculate_send_airdrop_distribution(
     _: &NFTAdminCap,
     record: &MintRecord,
@@ -378,6 +403,13 @@ public fun calculate_send_airdrop_distribution(
     linked_table::destroy_empty(nft_weights);
 }
 
+/// Function to get an airdrop for an NFT.
+/// This function transfers the airdropped SUI coin to the specified recipient.
+/// 
+/// @param nft: The NFT for which the airdrop is being claimed.
+/// @param to_recive: The receiving object for the airdropped SUI coin.
+/// @param recipient: The address of the recipient who will receive the airdropped SUI coin.
+/// @param _: The transaction context.
 public fun get_airdrop(
     nft:& mut AnimalNFT,
     to_recive: Receiving<Coin<SUI>>,

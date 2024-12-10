@@ -25,9 +25,10 @@ const ERR_PURCHASE_AMOUNT_EXCEEDS_UNFROZEN_SUPPLY: u64 = 4;
 const ERR_CANNOT_BURN_MORE_THAN_CIRCULATING_SUPPLY: u64 = 5;
 const ERR_INSUFFICIENT_BALANCE: u64 = 6;
 const ERR_CANNOT_SWAP_MORE_THAN_CIRCULATING_SUPPLY: u64 = 7;
+const ERR_INSUFFICIENT_REWARD_BALANCE: u64 = 8;
 
 
-const TOTAL_SUPPLY: u64 = 1_000_000_000;
+const TOTAL_SUPPLY: u64 = 10_000_000_000_000_000_000;
 
 public struct Wild_Supply has key {
     id: UID,
@@ -151,6 +152,34 @@ public fun swap_wild_coin_for_sui(
     transfer::public_transfer(sui_coin, recipient);
 }
 
+public fun deposit_sui_coin_to_reward(
+    _: &WILD_COIN_AdminCap,
+    vault: &mut WildVault,
+    sui_coin: Coin<SUI>,
+    _: &mut TxContext
+) {
+    let balance_dewrap = coin::into_balance(sui_coin);
+    vault.reward_sui_blance.join(balance_dewrap);
+
+}
+
+public fun withdraw_sui_from_reward(
+    _: &WILD_COIN_AdminCap,
+    vault: &mut WildVault,
+    amount: u64,
+    recipient: address,
+    ctx: &mut TxContext
+){
+    // Ensure the amount to be withdrawn does not exceed the available balance in the reward
+    assert!(vault.reward_sui_blance.value() >= amount, ERR_INSUFFICIENT_REWARD_BALANCE);
+
+    // Split the balance to get the specified amount
+    let withdrawn_coin = coin::take(&mut vault.reward_sui_blance, amount, ctx);
+
+    // Transfer the withdrawn SUI coin to the recipient
+    transfer::public_transfer(withdrawn_coin, recipient);
+}
+
 
 /// Deposit wild coin
 public(package) fun deposit_wild_coin(bank: &mut WildVault, wild_coin: Coin<WILD_COIN>) {
@@ -192,6 +221,16 @@ public(package) fun burn_wild_coin(
     supply.circulating_supply = supply.circulating_supply - amount;
 }
 
+// This function deposits SUI into the lending platform.
+// It ensures that the specified amount of SUI is deposited from the vault to the lending platform.
+// 
+// @param clock The clock to get the current timestamp.
+// @param storage The storage for the lending platform.
+// @param pool_a The incentive funds pool for SUI.
+// @param vault The vault containing the SUI balance.
+// @param deposit_coin The SUI coin to be deposited.
+// @param inc_v1 The incentive V1 for the lending platform.
+// @param inc_v2 The incentive V2 for the lending platform.
 public(package) fun deposit_sui_to_lending_platform(
     clock: &Clock,
     storage: &mut Storage,
@@ -203,6 +242,19 @@ public(package) fun deposit_sui_to_lending_platform(
         lending_core::incentive_v2::deposit_with_account_cap<SUI>(clock, storage, pool_a, vault.sui_index, deposit_coin, inc_v1, inc_v2, &vault.account_cap);
 }
 
+// Withdraws SUI from the lending platform and deposits it into the vault.
+// 
+// This function ensures that the specified amount of SUI is withdrawn from the lending platform and deposited into the vault's SUI balance.
+// 
+// @param vault The vault containing the SUI balance.
+// @param sui_withdraw_amount The amount of SUI to withdraw.
+// @param storage The storage for the lending platform.
+// @param pool_sui The incentive funds pool for SUI.
+// @param inc_v1 The incentive V1 for the lending platform.
+// @param inc_v2 The incentive V2 for the lending platform.
+// @param clock The clock to get the current timestamp.
+// @param oracle The price oracle for SUI.
+// @param ctx The transaction context.
 public(package) fun withdraw_sui_from_lending_platform(
     vault: & mut WildVault,
     sui_withdraw_amount: u64,
@@ -229,6 +281,16 @@ public(package) fun deposit_sui_to_vault(
     balance::join(&mut vault.sui_balance, coin::into_balance(deposit_coin));
 }
 
+/// Claims rewards from the lending platform and deposits them into the vault.
+/// 
+/// This function ensures that the rewards are claimed from the lending platform and deposited into the vault's reward balance.
+/// 
+/// @param vault The vault containing the SUI reward balance.
+/// @param clock The clock to get the current timestamp.
+/// @param storage The storage for the lending platform.
+/// @param pool_sui The incentive funds pool for SUI.
+/// @param inc_v2 The incentive for the lending platform.
+/// @param ctx The transaction context.
 public(package) fun claim_reward_from_lending_platform(
     clock: &Clock,
     storage: &mut Storage,
@@ -255,6 +317,12 @@ public(package) fun claim_reward_from_lending_platform(
     deposit_reward_sui_to_vault(vault, reward_coin);
 }
 
+/// Deposits a specified amount of SUI into the vault's reward balance.
+/// 
+/// This function merges the deposit coin into the vault's reward SUI balance.
+/// 
+/// @param vault The vault containing the SUI reward balance.
+/// @param deposit_coin The SUI coin to be deposited.
 public(package) fun deposit_reward_sui_to_vault(
     vault: &mut WildVault,
     deposit_coin: Coin<SUI>,
@@ -263,6 +331,15 @@ public(package) fun deposit_reward_sui_to_vault(
     balance::join(&mut vault.reward_sui_blance, coin::into_balance(deposit_coin));
 }
 
+/// Withdraws a specified amount of SUI from the vault.
+/// 
+/// This function ensures that the amount to be withdrawn does not exceed the available balance.
+/// It then splits the balance to get the specified amount and returns the withdrawn coin.
+/// 
+/// @param vault The vault containing the SUI balance.
+/// @param amount The amount of SUI to be withdrawn.
+/// @param ctx The transaction context.
+/// @return The withdrawn SUI coin.
 public(package) fun withdraw_sui_from_vault(
     vault: &mut WildVault,
     amount: u64,
@@ -278,6 +355,16 @@ public(package) fun withdraw_sui_from_vault(
     withdrawn_coin
 }
 
+/// Distributes the airdrop rewards to the NFT holders based on the airdrop distribution table.
+/// 
+/// This function calculates the total amount of SUI to be distributed from the vault's reward balance.
+/// It then iterates over the airdrop table, which contains the NFT IDs and their corresponding reward ratios.
+/// For each NFT, it calculates the reward amount based on the ratio and ensures the amount is greater than zero.
+/// If the reward amount is valid, it withdraws the SUI from the vault and transfers it to the NFT's address.
+/// 
+/// @param airdrop_table The table containing the NFT IDs and their reward ratios.
+/// @param vault The vault containing the SUI reward balance.
+/// @param ctx The transaction context.
 public(package) fun distribute_airdrop(
     airdrop_table: &LinkedTable<ID, u64>,
     vault: &mut WildVault,
