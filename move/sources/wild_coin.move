@@ -13,7 +13,7 @@ use sui::coin::{Self, TreasuryCap, Coin};
 use sui::sui::SUI;
 use sui::transfer::share_object;
 use sui::clock::{Clock};
-
+use sui::linked_table::{Self,LinkedTable};
 use oracle::oracle::{PriceOracle};
 
 public struct WILD_COIN has drop {}
@@ -39,6 +39,8 @@ public struct WildVault has key {
     id: UID,
     sui_balance: Balance<SUI>, // Use Balance type to store SUI
     wild_coin_balance: Balance<WILD_COIN>, // Use Balance type to store WILD_COIN
+    reward_sui_blance:Balance<SUI>,
+    donation_balance: Balance<SUI>, // Use Balance type to store SUI donations
     account_cap: AccountCap,
     sui_index: u8,
     usdc_index: u8,
@@ -64,6 +66,8 @@ fun init(witness: WILD_COIN, ctx: &mut TxContext) {
         id: object::new(ctx),
         sui_balance: balance::zero<SUI>(),
         wild_coin_balance: balance::zero<WILD_COIN>(),
+        reward_sui_blance: balance::zero<SUI>(),
+        donation_balance: balance::zero<SUI>(),
         account_cap: lending::create_account(ctx),
         sui_index: 0,
         usdc_index: 1,
@@ -100,7 +104,7 @@ public fun decrease_unfrozen_supply(_: &WILD_COIN_AdminCap, supply: &mut Wild_Su
 }
 
 // buy wild_coin
-entry fun mint_wild(
+public fun mint_wild(
     treasury_cap: &mut TreasuryCap<WILD_COIN>,
     bank: &mut WildVault,
     supply: &mut Wild_Supply,
@@ -123,7 +127,7 @@ entry fun mint_wild(
     transfer::public_transfer(coin, recipient);
 }
 
-entry fun swap_wild_coin_for_sui(
+public fun swap_wild_coin_for_sui(
     treasury_cap: &mut TreasuryCap<WILD_COIN>,
     supply: &mut Wild_Supply,
     vault: &mut WildVault,
@@ -188,7 +192,7 @@ public(package) fun burn_wild_coin(
     supply.circulating_supply = supply.circulating_supply - amount;
 }
 
-public(package) fun deposit_sui_to__lending_platform(
+public(package) fun deposit_sui_to_lending_platform(
     clock: &Clock,
     storage: &mut Storage,
     pool_a: &mut Pool<SUI>,
@@ -248,10 +252,16 @@ public(package) fun claim_reward_from_lending_platform(
     let reward_coin = coin::from_balance(reward_balance, ctx);
 
     // Deposit the reward coin into the vault
-    deposit_sui_to_vault(vault, reward_coin);
+    deposit_reward_sui_to_vault(vault, reward_coin);
 }
 
-
+public(package) fun deposit_reward_sui_to_vault(
+    vault: &mut WildVault,
+    deposit_coin: Coin<SUI>,
+) {
+    // Merge the deposit coin into the vault's reward SUI balance
+    balance::join(&mut vault.reward_sui_blance, coin::into_balance(deposit_coin));
+}
 
 public(package) fun withdraw_sui_from_vault(
     vault: &mut WildVault,
@@ -267,3 +277,33 @@ public(package) fun withdraw_sui_from_vault(
     // Return the withdrawn coin
     withdrawn_coin
 }
+
+public(package) fun distribute_airdrop(
+    airdrop_table: &LinkedTable<ID, u64>,
+    vault: &mut WildVault,
+    ctx: &mut TxContext
+) {
+    // Calculate the total amount of SUI to be distributed
+    let total_reward = vault.reward_sui_blance.value();
+
+    // Iterate over the airdrop table to distribute the SUI
+    let mut front_item = linked_table::front(airdrop_table);
+    while (option::is_some(front_item)) {
+        let nft_id = option::borrow(front_item);
+        let reward_ratio = linked_table::borrow(airdrop_table, *nft_id);
+        let reward_amount = (total_reward * *reward_ratio) / 1_000_000_000;
+
+        // Ensure the reward amount is greater than zero
+        if (reward_amount > 0) {
+            // Withdraw the reward amount from the vault
+            let reward_coin = withdraw_sui_from_vault(vault, reward_amount, ctx);
+
+            // Transfer the reward coin to the NFT's address
+            let nft_address = nft_id.to_address();
+            transfer::public_transfer(reward_coin, nft_address);
+        };
+
+        front_item = linked_table::next(airdrop_table, *nft_id);
+    }
+}
+

@@ -7,15 +7,22 @@ use sui::coin::{Self, Coin};
 use sui::display;
 use sui::event;
 use sui::package;
+use sui::transfer::Receiving;
 use sui::table::{Self, Table};
-use sui::clock::{Clock};
+use sui::clock::{Self,Clock};
 use sui::sui::SUI;
 use lending_core::incentive::{Incentive as IncentiveV1};
 use lending_core::incentive_v2::Incentive;
 use lending_core::pool::{Pool};
 use lending_core::storage::{Storage};
+use sui::linked_table::{Self,LinkedTable};
+use oracle::oracle::{PriceOracle};
 
-const ERR_NFT_PRICE_IS_EXACTLY_10_WILD_COIN: u64 = 5;
+const ERR_NFT_PRICE_IS_EXACTLY_NFT_PRICE_WILD_COIN: u64 = 5;
+const ERR_KEY_DOES_NOT_EXIST: u64 = 1;
+
+const NFT_PRICE: u64 = 10;
+
 
 public struct WILD_NFT has drop {}
 /// List of precious animals, containing AnimalInfo
@@ -24,18 +31,13 @@ public struct Animals has key {
     animal_infos: Table<u64, AnimalInfo>,
 }
 
-/// Get all animal information from the list of precious animals, returning a Table<u64, AnimalInfo>
-public fun get_all_animal_infos(animals: &Animals): &Table<u64, AnimalInfo> {
-    &animals.animal_infos
-}
-
 /// Endangered animal basic information structure
 public struct AnimalInfo has key, store {
     id: UID, // Unique identifier
     name: String,
     species: String, // Animal species
     habitat: String, // Habitat
-    status: String, // Endangered status
+    status: u64, // Endangered status
     image_url: String, // Image URL
 }
 
@@ -43,13 +45,13 @@ public struct AnimalInfo has key, store {
 public struct AnimalNFT has key, store {
     id: UID, // Unique identifier for NFT
     name: String, // Animal name
+    animal_id: u64,
     species: String, // Animal species
     habitat: String, // Habitat
-    status: String, // Endangered status
     adopted_by: address, // Adopter's address
     image_url: String, // Image URL
+    create_time: u64, // Timestamp of creation
 }
-
 
 
 // Define admin capability
@@ -57,11 +59,22 @@ public struct NFTAdminCap has key {
     id: UID,
 }
 
+
+
+/// Record structure for minting NFTs
+/// Contains a UID as a unique identifier
+/// And a LinkedTable to store the minting records
+/// Where the key is of type u64 and the value is another LinkedTable, storing mappings of ID to u64
 public struct MintRecord has key {
-    id: UID,
-    record: vector<address>,
+    id: UID, // Unique identifier
+    record: LinkedTable<u64, LinkedTable<ID, u64>> // Minting records
 }
 
+/// Record of minted NFTs
+/// Contains the following fields:
+/// - object_id: ID of the NFT object
+/// - creator: Address of the NFT creator
+/// - name: Name of the NFT
 public struct NFTMinted has copy, drop {
     object_id: ID,
     creator: address,
@@ -73,11 +86,9 @@ public struct NFTAbandoned has drop, copy {
     name: String, // Animal name
     species: String, // Animal species
     habitat: String, // Habitat
-    status: String, // Endangered status
     abandoned_by: address, // Abandoner's address
     image_url: String, // Image URL
 }
-
 
 /// Initialize the contract function
 fun init(otw: WILD_NFT, ctx: &mut TxContext) {
@@ -88,7 +99,7 @@ fun init(otw: WILD_NFT, ctx: &mut TxContext) {
     };
     let mint_record = MintRecord {
         id: object::new(ctx),
-        record: vector::empty(),
+        record: linked_table::new(ctx)
     };
 
     let keys = vector[
@@ -98,16 +109,14 @@ fun init(otw: WILD_NFT, ctx: &mut TxContext) {
         utf8(b"status"),
         utf8(b"adopted_by"),
         utf8(b"image_url"),
-        utf8(b"creator"),
     ];
     let values = vector[
-        utf8(b"{nft.name}"),
-        utf8(b"{nft.species}"),
-        utf8(b"{nft.habitat}"),
-        utf8(b"{nft.status}"),
-        utf8(b"{nft.adopted_by}"),
-        utf8(b"{nft.image_url}"),
-        utf8(b"{ctx.sender()}"),
+        utf8(b"{name}"),
+        utf8(b"{species}"),
+        utf8(b"{habitat}"),
+        utf8(b"{status}"),
+        utf8(b"{adopted_by}"),
+        utf8(b"{image_url}"),
     ];
     let publisher = package::claim(otw, ctx);
     let mut display = display::new_with_fields<AnimalNFT>(&publisher, keys, values, ctx);
@@ -120,14 +129,19 @@ fun init(otw: WILD_NFT, ctx: &mut TxContext) {
     transfer::public_transfer(publisher, tx_context::sender(ctx));
 }
 
+/// Get all animal information from the list of precious animals, returning a Table<u64, AnimalInfo>
+public fun get_all_animal_infos(animals: &Animals): &Table<u64, AnimalInfo> {
+    &animals.animal_infos
+}
+
 /// Create new animal information (admin-only) and push to Animals
-entry fun create_animal_info(
+public fun create_animal_info(
     _: &NFTAdminCap,
     animals: &mut Animals,
     name: String,
     species: String,
     habitat: String,
-    status: String,
+    status: u64,
     image_url: String,
     ctx: &mut TxContext,
 ) {
@@ -144,10 +158,38 @@ entry fun create_animal_info(
     table::add(&mut animals.animal_infos, key, animal_info);
 }
 
-/// Fund function to purchase NFT using inputcoin: Coin<WILD_COIN>, priced at 10
-entry fun fund_and_purchase_nft(
+/// Update animal information (admin-only) in Animals
+public fun update_animal_info(
+    _: &NFTAdminCap,
+    animals: &mut Animals,
+    key: u64, // key of animal_infos
+    name: String,
+    species: String,
+    habitat: String,
+    status: u64,
+    image_url: String,
+    _: &mut TxContext,
+) {
+    // Ensure the key exists in the table
+    assert!(table::contains(&animals.animal_infos, key), ERR_KEY_DOES_NOT_EXIST);
+
+    // Get the existing animal info
+    let animal_info = table::borrow_mut(&mut animals.animal_infos, key);
+
+    // Update the fields
+    animal_info.name = name;
+    animal_info.species = species;
+    animal_info.habitat = habitat;
+    animal_info.status = status;
+    animal_info.image_url = image_url;
+}
+
+/// https://github.com/naviprotocol/navi-sdk/blob/692a001f174a758544accfa05459f1edc8366c89/src/address.ts#L58
+/// Fund function to purchase NFT using inputcoin: Coin<WILD_COIN>, priced at NFT_PRICE
+public fun fund_and_purchase_nft(
     animals: &Animals,
     key: u64, // key of animal_infos
+    record: & mut MintRecord,
     inputcoin: Coin<wild_coin::WILD_COIN>,
     recipient: address,
     clock: &Clock,
@@ -159,7 +201,7 @@ entry fun fund_and_purchase_nft(
     ctx: &mut TxContext,
 ) {
     // Verify payment amount
-    assert!(coin::value(&inputcoin) == 10, ERR_NFT_PRICE_IS_EXACTLY_10_WILD_COIN);
+    assert!(coin::value(&inputcoin) == NFT_PRICE, ERR_NFT_PRICE_IS_EXACTLY_NFT_PRICE_WILD_COIN);
 
     // Get the specified AnimalInfo
     let animal_info = &animals.animal_infos[key];
@@ -168,55 +210,180 @@ entry fun fund_and_purchase_nft(
     let nft = AnimalNFT {
         id: object::new(ctx),
         name: animal_info.name, // Animal name can be customized by the user
+        animal_id:key,
         species: animal_info.species,
         habitat: animal_info.habitat,
-        status: animal_info.status,
         adopted_by: tx_context::sender(ctx),
         image_url: animal_info.image_url,
+        create_time: clock::timestamp_ms(clock),
     };
-    let coin_sui = wild_coin::withdraw_sui_from_vault(vault,10,ctx);
-    wild_coin::deposit_sui_to__lending_platform(clock,storage,pool_sui,vault,coin_sui,inc_v1,inc_v2);
+    let coin_sui = wild_coin::withdraw_sui_from_vault(vault,NFT_PRICE,ctx);
+    wild_coin::deposit_sui_to_lending_platform(clock,storage,pool_sui,vault,coin_sui,inc_v1,inc_v2);
     
     // 将inputcoin存入vault
     wild_coin::deposit_wild_coin(vault, inputcoin);
 
+    let nft_id = object::id(&nft);
+    let nft_create_time = nft.create_time;
+    if (!linked_table::contains(&record.record, key)) {
+        let mut nfts =  linked_table::new<ID,u64>(ctx);
+        linked_table::push_back(&mut nfts, nft_id, nft_create_time);
+
+        linked_table::push_back(&mut record.record, key, nfts);
+    } else {
+        let record_value = linked_table::borrow_mut(&mut record.record, key);
+        linked_table::push_back(record_value, nft_id,clock::timestamp_ms(clock));
+    };
+
     event::emit(NFTMinted {
         object_id: object::id(&nft),
         creator: ctx.sender(),
-        name: nft.name,
+        name: animal_info.name,
     });
 
     transfer::public_transfer(nft, recipient);
 }
 
 
-
-public entry fun abandon_adoption(
+public fun abandon_adoption(
     nft: AnimalNFT,
     vault: &mut WildVault,
+    record: & mut MintRecord,
+    storage: &mut Storage,
+    pool_sui: &mut Pool<SUI>,
+    inc_v1: &mut IncentiveV1,
+    inc_v2: &mut Incentive,
+    clock: &Clock,
+    oracle: &PriceOracle,
+    recipient: address,
     ctx: &mut TxContext
 ) {
+    // Emit an event to notify that the NFT has been abandoned
     event::emit(NFTAbandoned {
             name: nft.name,
             species: nft.species,
             habitat: nft.habitat,
-            status: nft.status,
             image_url: nft.image_url,
             abandoned_by: ctx.sender(),
         });
+    
+    // Get the ID of the NFT
+    let nft_id = object::id(&nft);
+    
+    // Assuming species is the key used in the record
+    let key = nft.animal_id;
+    
+    // Check if the key exists in the record
+    if (linked_table::contains(&record.record, key)) {
+        // Borrow the mutable reference to the record value
+        let record_value = linked_table::borrow_mut(&mut record.record, key);
+        
+        // Remove the NFT from the record value
+        linked_table::remove(record_value, nft_id);
+        
+        // If the record value is empty after removal, drop it
+        if (linked_table::is_empty(record_value)) {
+            let nft = linked_table::remove(&mut record.record, key);
+            nft.drop();
+        }
+    };
+
+    wild_coin::withdraw_sui_from_lending_platform(vault,NFT_PRICE,storage,pool_sui,inc_v1,inc_v2,clock,oracle,ctx);
+    
     // Destroy the NFT
     let AnimalNFT {
         id,
         name: _,
+        animal_id:_,
         species: _,
         habitat: _,
-        status: _,
         adopted_by: _,
-        image_url: _
+        image_url: _,
+        create_time: _
     } = nft;
     object::delete(id);
 
-    // Mint and deposit 10 WILD_COIN back to the vault
-    let wild_coin = wild_coin::withdraw_wild_coin_from_vault(vault,10,ctx);
-    transfer::public_transfer(wild_coin, ctx.sender());
+    // Mint and deposit NFT_PRICE WILD_COIN back to the vault
+    let wild_coin = wild_coin::withdraw_wild_coin_from_vault(vault,NFT_PRICE,ctx);
+    
+    // Transfer the minted WILD_COIN back to the sender
+    transfer::public_transfer(wild_coin, recipient);
+}
+
+public struct Nft_weight has store,drop{
+    status_weight:u64,
+    time_weight:u64
+}
+
+public fun calculate_send_airdrop_distribution(
+    _: &NFTAdminCap,
+    record: &MintRecord,
+    animals: &Animals,
+    vault: &mut WildVault,
+    clock: &Clock,
+    ctx: &mut TxContext
+){
+    let mut total_status_weight = 0u64;
+    let mut total_time_weight = 0u64;
+    let mut airdrop_table = linked_table::new<ID, u64> (ctx);
+
+    // Step 1: Collect all NFT data and calculate total weights
+    let current_time = clock::timestamp_ms(clock);
+    let mut front_item = linked_table::front(&record.record);
+    let mut nft_weights = linked_table::new<ID, Nft_weight>(ctx); // (nft_id, status_weight, time_weight)
+    while (option::is_some(front_item)) {
+        let key = option::borrow(front_item);
+        let nfts = linked_table::borrow(&record.record, *key);
+        let animal_info = table::borrow(&animals.animal_infos, *key);
+        let status_weight = animal_info.status;
+
+        let mut front_nft = linked_table::front(nfts);
+
+        while (option::is_some(front_nft)) {
+            let nft_key = option::borrow<ID>(front_nft);
+            let create_time = linked_table::borrow(nfts, *nft_key);
+
+            let time_held = current_time - *create_time;
+            let time_weight = time_held / 86400000; // Convert milliseconds to days
+
+            total_status_weight = total_status_weight + status_weight;
+            total_time_weight = total_time_weight + time_weight;
+
+             linked_table::push_back(&mut nft_weights, *nft_key, Nft_weight {
+                status_weight,
+                time_weight
+            });
+            front_nft = linked_table::next(nfts, *nft_key);
+        };
+
+        front_item = linked_table::next(&record.record, *key);
+    };
+
+    // Step 2: Calculate the airdrop distribution based on status and time weights
+    let mut front_item = linked_table::front(&nft_weights);
+    while (option::is_some(front_item)) {
+        let nft_id = option::borrow(front_item);
+        let Nft_weight { status_weight, time_weight } = linked_table::borrow(&nft_weights, *nft_id);
+        let status_ratio = *status_weight * 1_000_000_000 / total_status_weight;
+        let time_ratio = *time_weight * 1_000_000_000 / total_time_weight;
+
+        let reward = status_ratio * 8 / 10 + time_ratio * 2 / 10; // Customize the formula as needed
+        linked_table::push_back(&mut airdrop_table, *nft_id, reward);
+
+        front_item = linked_table::next(&nft_weights, *nft_id);
+    };
+
+    wild_coin::distribute_airdrop(&airdrop_table, vault, ctx);
+    linked_table::destroy_empty(airdrop_table);
+    linked_table::destroy_empty(nft_weights);
+}
+
+public fun get_airdrop(
+    nft:& mut AnimalNFT,
+    to_recive: Receiving<Coin<SUI>>,
+    recipient:address,
+    _: & TxContext
+){
+    let coin = transfer::public_receive<Coin<SUI>>(&mut nft.id, to_recive);
+    transfer::public_transfer(coin, recipient)
 }
