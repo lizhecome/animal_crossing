@@ -1,6 +1,5 @@
 import { suiClient } from "@/config";
 import { OBJECT_IDS } from "@/config/constants";
-import { useSignAndExecuteTransaction } from "@mysten/dapp-kit";
 import { Transaction } from "@mysten/sui/transactions";
 
 
@@ -47,7 +46,7 @@ export async function buyWildCoin(
     },
       {
         onSuccess: async ({ digest }: { digest: string }) => {
-          const { effects } = await suiClient.waitForTransaction({
+          await suiClient.waitForTransaction({
             digest: digest,
             options: {
               showEffects: true,
@@ -91,7 +90,7 @@ export async function sellWildCoin(
     },
       {
         onSuccess: async ({ digest }: { digest: string }) => {
-          const { effects } = await suiClient.waitForTransaction({
+          await suiClient.waitForTransaction({
             digest: digest,
             options: {
               showEffects: true,

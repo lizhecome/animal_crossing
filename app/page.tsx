@@ -12,18 +12,24 @@ import { getCurrentRewardAmount } from '@/lib/rewards' // 导入获取CurrentRew
 import { getNfts } from '@/lib/nft' // 导入获取NFT数据的函数
 import { OBJECT_IDS } from '@/config/constants'
 
+export interface Nft {
+  id: string;
+  imageUrl: string;
+  name: string;
+  reward?: string; // 可选属性，用于存储奖励信息
+}
+
 export default function Home() {
   const account = useCurrentAccount();
   const [userObjects, setUserObjects] = useState<CategorizedObjects | null>(null);
   const [wildCoinCirculation, setWildCoinCirculation] = useState<string | null>(null);
   const [nftMintCount, setNftMintCount] = useState<string | null>(null);
   const [currentRewardAmount, setCurrentRewardAmount] = useState<string | null>(null);
-  const [nfts, setNfts] = useState<any[]>([]); // 假设 NFT 数据结构
+  const [nfts, setNfts] = useState<Nft[]>([]); 
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [showSellModal, setShowSellModal] = useState(false);
   const [buyAmount, setBuyAmount] = useState('');
   const [sellAmount, setSellAmount] = useState('');
-  const [suiBalance, setSuiBalance] = useState('');
   const { mutate: signAndExecuteTransaction } = useSignAndExecuteTransaction();
   useEffect(() => {
     async function fetchUserProfile() {

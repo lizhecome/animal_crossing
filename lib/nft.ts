@@ -3,13 +3,38 @@ import { OBJECT_IDS } from "@/config/constants";
 import { getSuiAssert } from "@/utils/assetsHelpers";
 import { Transaction } from "@mysten/sui/transactions";
 
+interface NftFields {
+    count?: number;
+}
+interface DynamicFieldItem {
+    objectId: string;
+}
+
+interface AnimalFields {
+    id?: string;
+    animal_infos?: {
+        fields: {
+            id: {
+                id: string;
+            };
+        };
+    };
+}
+
+interface NftDetail {
+    id: string;
+    name: string;
+    imageUrl: string;
+    species: string;
+    status: string;
+    habitat: string;
+}
+
 export async function getNftMintCount(): Promise<string> {
     const response = await suiClient.getObject({ id: OBJECT_IDS.MintRecord, options: { showContent: true } });
     if (response.data && response.data.content && "fields" in response.data.content) {
-        const fields = response.data.content.fields as { [key: string]: any };
-        const nft_Fields: {
-            count?: number;
-        } = {
+        const fields = response.data.content.fields as NftFields;
+        const nft_Fields: NftFields = {
             count: fields.count,
         };
         return nft_Fields.count?.toString() ?? "0";
@@ -17,25 +42,24 @@ export async function getNftMintCount(): Promise<string> {
     return "无数据";
 }
 
-export async function getNfts(): Promise<any[]> {
+export async function getNfts(): Promise<NftDetail[]> {
     const animal_response = await suiClient.getObject({ id: OBJECT_IDS.Animals, options: { showContent: true } });
     let parentId = '';
     if (animal_response.data && animal_response.data.content && "fields" in animal_response.data.content) {
-        const fields = animal_response.data.content.fields as { [key: string]: any };
+        const fields = animal_response.data.content.fields as AnimalFields;
         const nft_Fields: {
             id?: string;
         } = {
-            id: fields.animal_infos.fields.id.id,
+            id: fields.animal_infos?.fields.id.id,
         };
         parentId = nft_Fields.id?.toString() ?? "0";
     } else {
         return [];
     }
-    // 假设我们从某个API或合约中获取NFT数据
     const response = await suiClient.getDynamicFields({
         parentId: parentId
     });
-    let nfts = response.data.map((item: any) => ({
+    const nfts = response.data.map((item: DynamicFieldItem) => ({
         objectId: item.objectId,
     }));
     const nftDetails = await Promise.all(nfts.map(async (nft) => {
@@ -56,7 +80,7 @@ export async function getNfts(): Promise<any[]> {
         return null;
     }));
 
-    let animal = nftDetails.filter(nft => nft !== null);
+    const animal = nftDetails.filter(nft => nft !== null) as NftDetail[];
     return animal;
 }
 
@@ -96,7 +120,7 @@ export async function adoptNft(
         },
             {
                 onSuccess: async ({ digest }: { digest: string }) => {
-                    const { effects } = await suiClient.waitForTransaction({
+                    await suiClient.waitForTransaction({
                         digest: digest,
                         options: {
                             showEffects: true,
@@ -144,7 +168,7 @@ export async function abandonNft(
         },
             {
                 onSuccess: async ({ digest }: { digest: string }) => {
-                    const { effects } = await suiClient.waitForTransaction({
+                    await suiClient.waitForTransaction({
                         digest: digest,
                         options: {
                             showEffects: true,
@@ -192,7 +216,7 @@ export async function claimReward(
         },
             {
                 onSuccess: async ({ digest }: { digest: string }) => {
-                    const { effects } = await suiClient.waitForTransaction({
+                    await suiClient.waitForTransaction({
                         digest: digest,
                         options: {
                             showEffects: true,

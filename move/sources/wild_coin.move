@@ -375,6 +375,21 @@ public(package) fun withdraw_sui_from_vault(
     withdrawn_coin
 }
 
+public(package) fun withdraw_sui_from_vault_reward(
+    vault: &mut WildVault,
+    amount: u64,
+    ctx: &mut TxContext
+): Coin<SUI> {
+    // Ensure the amount to be withdrawn does not exceed the available balance
+    assert!(vault.reward_sui_blance.value() >= amount, ERR_INSUFFICIENT_BALANCE);
+
+    // Split the balance to get the specified amount
+    let withdrawn_coin = coin::take(&mut vault.reward_sui_blance, amount, ctx);
+
+    // Return the withdrawn coin
+    withdrawn_coin
+}
+
 /// Distributes the airdrop rewards to the NFT holders based on the airdrop distribution table.
 /// 
 /// This function calculates the total amount of SUI to be distributed from the vault's reward balance.
@@ -399,8 +414,12 @@ public(package) fun distribute_airdrop(
     let distribution_amount = total_reward - donation_amount;
 
     // Withdraw the donation amount from the vault and add it to the donation balance
-    let donation_coin = withdraw_sui_from_vault(vault, donation_amount, ctx);
+    let donation_coin = withdraw_sui_from_vault_reward(vault, donation_amount, ctx);
     balance::join(&mut vault.donation_balance, coin::into_balance(donation_coin));
+
+    // Withdraw the remaining reward amount from the vault and add it to the sui_balance
+    let remaining_reward_coin = withdraw_sui_from_vault_reward(vault, distribution_amount, ctx);
+    balance::join(&mut vault.sui_balance, coin::into_balance(remaining_reward_coin));
 
     // Update the total reward to reflect the remaining amount for distribution
     let total_reward = distribution_amount;
