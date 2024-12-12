@@ -1,3 +1,4 @@
 node_modules
 move/build
 .next
+.DS_Store
