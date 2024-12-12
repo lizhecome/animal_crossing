@@ -1,5 +1,5 @@
 # Project Introduction: DeFi for Wildlife Conservation
-
+![screenshot](https://raw.githubusercontent.com/lizhecome/animal_crossing/refs/heads/main/screenshot.png)
 ## Project Name: WildGuard
 ### Blockchain Platform: Sui
 ### Core Token: Wild
