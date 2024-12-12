@@ -1,0 +1,16 @@
+export const OBJECT_IDS = {
+    package_id: "0xc199500bcbe51fb99480853d14009cbf603fe9ebff3851bd8976b95a535ba25b",
+    WILD_COIN_AdminCap: "0x915996a8b6ad0fe93adec3ef2f8c3b06cd3c425a292a9eba5a344f613a6ab5be",
+    Wild_Supply: "0xcabe65843c715a5fa03dc18083532ecfcfd0b998574f9ade3a1f70c9bc54617f",
+    Animals: "0xf525630b4be045fae91915dd1b05b93b345dfc487dd81297db7204bd0987721f",
+    WildVault: "0xc987f8b72887135f65622cd9442538f390f7c6a0f020369b63c639dbae74c2dd",
+    NFTAdminCap: "0xb67c14f690ace58fe5e1ae3d1356ffe2c175e0940bb43f84fcaec59856353541",
+    MintRecord: "0x7109c86e60355b8becdc8b0aa49b1dc306e34fcccc915a52214c32ddce62c90f",
+    TreasuryCap: "0x5e30d379b7a15d5d648e29ed6c565c686f9e8ecfb5d621ef51fe279f9058a65e",
+    clock: "0x6",
+    storage: "0xbb4e2f4b6205c2e2a2db47aeb4f830796ec7c005f88537ee775986639bc442fe",
+    pool_sui: "0x96df0fce3c471489f4debaaa762cf960b3d97820bd1f3f025ff8190730e958c5",
+    inc_v1: "0xaaf735bf83ff564e1b219a0d644de894ef5bdc4b2250b126b2a46dd002331821",
+    inc_v2: "0xf87a8acb8b81d14307894d12595541a73f19933f88e1326d5be349c7a6f7559c",
+    PriceOracle: "0x1568865ed9a0b5ec414220e8f79b3d04c77acc82358f6e5ae4635687392ffbef",
+};

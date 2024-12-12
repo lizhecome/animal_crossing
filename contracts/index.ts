@@ -25,6 +25,6 @@ export const getUserProfile = async (address: string): Promise<CategorizedObject
     hasNextPage = response.hasNextPage;
     nextCursor = response.nextCursor ?? null;
   }
-
+  console.log(allObjects);
   return categorizeSuiObjects(allObjects);
 };

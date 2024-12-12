@@ -25,12 +25,12 @@ const ERR_NFT_PRICE_IS_EXACTLY_NFT_PRICE_WILD_COIN: u64 = 5;
 const ERR_KEY_DOES_NOT_EXIST: u64 = 1;
 
 // The price of the NFT in WILD_COIN, set to 1 billion (10^9) WILD_COIN.
-const NFT_PRICE: u64 = 1000_000_000;
+const NFT_PRICE: u64 = 1_000_000_000;
 
 
 public struct WILD_NFT has drop {}
 /// List of precious animals, containing AnimalInfo
-public struct Animals has key {
+public struct Animals has key, store {
     id: UID,
     animal_infos: Table<u64, AnimalInfo>,
 }
@@ -67,9 +67,10 @@ public struct NFTAdminCap has key {
 /// Contains a UID as a unique identifier
 /// And a LinkedTable to store the minting records
 /// Where the key is of type u64 and the value is another LinkedTable, storing mappings of ID to u64
-public struct MintRecord has key {
+public struct MintRecord has key,store {
     id: UID, // Unique identifier
-    record: LinkedTable<u64, LinkedTable<ID, u64>> // Minting records
+    record: LinkedTable<u64, LinkedTable<ID, u64>>, // Minting records
+    count:u64 // Minting count
 }
 
 /// Record of minted NFTs
@@ -101,7 +102,8 @@ fun init(otw: WILD_NFT, ctx: &mut TxContext) {
     };
     let mint_record = MintRecord {
         id: object::new(ctx),
-        record: linked_table::new(ctx)
+        record: linked_table::new(ctx),
+        count:0
     };
 
     let keys = vector[
@@ -241,7 +243,7 @@ public fun fund_and_purchase_nft(
         let record_value = linked_table::borrow_mut(&mut record.record, key);
         linked_table::push_back(record_value, nft_id,clock::timestamp_ms(clock));
     };
-
+    record.count = record.count + 1;
     event::emit(NFTMinted {
         object_id: object::id(&nft),
         creator: ctx.sender(),
@@ -299,7 +301,7 @@ public fun abandon_adoption(
             nft.drop();
         }
     };
-
+    record.count = record.count - 1;
     wild_coin::withdraw_sui_from_lending_platform(vault,NFT_PRICE,storage,pool_sui,inc_v1,inc_v2,clock,oracle,ctx);
     
     // Destroy the NFT
@@ -369,7 +371,7 @@ public fun calculate_send_airdrop_distribution(
             let create_time = linked_table::borrow(nfts, *nft_key);
 
             let time_held = current_time - *create_time;
-            let time_weight = time_held / 86400000; // Convert milliseconds to days
+            let time_weight = time_held / 86400000 + 1; // Convert milliseconds to days
 
             total_status_weight = total_status_weight + status_weight;
             total_time_weight = total_time_weight + time_weight;
@@ -383,6 +385,9 @@ public fun calculate_send_airdrop_distribution(
 
         front_item = linked_table::next(&record.record, *key);
     };
+
+    assert!(total_status_weight > 0, 1);
+    assert!(total_time_weight > 0, 2);
 
     // Step 2: Calculate the airdrop distribution based on status and time weights
     let mut front_item = linked_table::front(&nft_weights);
@@ -399,8 +404,8 @@ public fun calculate_send_airdrop_distribution(
     };
 
     wild_coin::distribute_airdrop(&airdrop_table, vault, ctx);
-    linked_table::destroy_empty(airdrop_table);
-    linked_table::destroy_empty(nft_weights);
+    linked_table::drop(airdrop_table);
+    linked_table::drop(nft_weights);
 }
 
 /// Function to get an airdrop for an NFT.

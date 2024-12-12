@@ -291,7 +291,8 @@ public(package) fun deposit_sui_to_vault(
 /// @param pool_sui The incentive funds pool for SUI.
 /// @param inc_v2 The incentive for the lending platform.
 /// @param ctx The transaction context.
-public(package) fun claim_reward_from_lending_platform(
+public fun claim_reward_from_lending_platform(
+    _: &WILD_COIN_AdminCap,
     clock: &Clock,
     storage: &mut Storage,
     pool_sui: &mut IncentiveFundsPool<SUI>,
