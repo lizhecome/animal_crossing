@@ -169,7 +169,7 @@ export default function Home() {
     }
   };
 
-  const handleClaimReward = async (nftId: string) => {
+  const handleClaimReward = async (nftId: {id:string}) => {
     if (account?.address) {
       await claimReward(
         nftId,
@@ -195,7 +195,7 @@ export default function Home() {
     }
   }
 
-  const handleAbandonNft = async (nftId: string) => {
+  const handleAbandonNft = async (nftId: {id:string}) => {
     if (account?.address) {
       await abandonNft(
         nftId,
@@ -240,40 +240,40 @@ export default function Home() {
         <ConnectButton className="text-white" />
       </header>
       <main className="flex-grow flex flex-col items-center p-8">
-        
+
         {userObjects != null ? (
           <div className="w-full max-w-6xl">
             <div className="w-full max-w-6xl mb-8">
-          <h2 className="text-2xl font-bold mb-4 text-white">Dashboard</h2>
-          <div className="grid grid-cols-3 gap-8">
-            <div className="flex-1 p-4 card-bg">
-              <h3 className="text-xl font-semibold mb-2 text-gray-700">Wild Coin Circulation</h3>
-              <p className="text-lg text-gray-600">{wildCoinCirculation}</p>
-            </div>
-            <div className="flex-1 p-4 card-bg">
-              <h3 className="text-xl font-semibold mb-2 text-gray-700">NFT Mint Count</h3>
-              <p className="text-lg text-gray-600">{nftMintCount}</p>
-            </div>
-            <div className="flex-1 p-4 card-bg">
-              <h3 className="text-xl font-semibold mb-2 text-gray-700">Current Reward Amount</h3>
-              <p className="text-lg text-gray-600">{currentRewardAmount}</p>
-            </div>
-          </div>
-        </div>
-        <div className="w-full max-w-6xl mb-8">
-          <h2 className="text-2xl font-bold mb-4 text-white">NFT Showcase</h2>
-          <div className="grid grid-cols-3 gap-8">
-            {nfts.map(nft => (
-              <div key={nft.id} className="flex flex-col items-center p-4 card-bg">
-                <img src={nft.imageUrl} alt={nft.name} className="w-full h-64 object-cover rounded-t-lg" />
-                <h3 className="text-xl font-semibold mt-4 text-gray-700">{nft.name}</h3>
-                <button className="mt-4 btn btn-primary" onClick={() => handleAdoptNft(nft.id)}>
-                  Adopt
-                </button>
+              <h2 className="text-2xl font-bold mb-4 text-white">Dashboard</h2>
+              <div className="grid grid-cols-3 gap-8">
+                <div className="flex-1 p-4 card-bg">
+                  <h3 className="text-xl font-semibold mb-2 text-gray-700">Wild Coin Circulation</h3>
+                  <p className="text-lg text-gray-600">{wildCoinCirculation}</p>
+                </div>
+                <div className="flex-1 p-4 card-bg">
+                  <h3 className="text-xl font-semibold mb-2 text-gray-700">NFT Mint Count</h3>
+                  <p className="text-lg text-gray-600">{nftMintCount}</p>
+                </div>
+                <div className="flex-1 p-4 card-bg">
+                  <h3 className="text-xl font-semibold mb-2 text-gray-700">Current Reward Amount</h3>
+                  <p className="text-lg text-gray-600">{currentRewardAmount}</p>
+                </div>
               </div>
-            ))}
-          </div>
-        </div>
+            </div>
+            <div className="w-full max-w-6xl mb-8">
+              <h2 className="text-2xl font-bold mb-4 text-white">NFT Showcase</h2>
+              <div className="grid grid-cols-3 gap-8">
+                {nfts.map(nft => (
+                  <div key={nft.id} className="flex flex-col items-center p-4 card-bg">
+                    <img src={nft.imageUrl} alt={nft.name} className="w-full h-64 object-cover rounded-t-lg" />
+                    <h3 className="text-xl font-semibold mt-4 text-gray-700">{nft.name}</h3>
+                    <button className="mt-4 btn btn-primary" onClick={() => handleAdoptNft(nft.id)}>
+                      Adopt
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-2xl font-bold text-white">Your Assets</h2>
               <div className="flex space-x-4">
@@ -302,25 +302,29 @@ export default function Home() {
                       <p className="text-gray-500">Count: {objects.length}</p>
                       <ul className="list-disc list-inside">
                         {objects.map((obj, index) => {
-                          const fields = obj.data?.content?.fields;
-                          if (!fields) return null;
-                          const createTime = new Date(Number(fields.create_time)).toLocaleDateString();
-                          return (
+                          const content = obj.data?.content;
+                          if (!content || !('fields' in content)) return null;
+                          const fields = content.fields;
+                          if (!fields || !('create_time' in fields)) return null;
+                          const createTime = new Date(Number(fields.create_time)).toLocaleDateString(); return (
                             <li key={index} className="mb-2 flex items-center justify-between">
                               <div className="flex items-center">
-                                <img src={fields.image_url} alt={fields.name} className="w-24 h-24 object-cover rounded-lg mr-4" />
-                                <div className="bg-gray-200 p-2 rounded-lg overflow-x-auto">
+                                <img
+                                  src={typeof fields.image_url === 'string' ? fields.image_url : '/default-image.jpg'}
+                                  alt={typeof fields.name === 'string' ? fields.name : 'Unknown'}
+                                  className="w-24 h-24 object-cover rounded-lg mr-4"
+                                />                            <div className="bg-gray-200 p-2 rounded-lg overflow-x-auto">
                                   <p className="text-sm text-gray-600"><strong>Create Time:</strong> {createTime}</p>
-                                  <p className="text-sm text-gray-600"><strong>Name:</strong> {fields.name}</p>
-                                  <p className="text-sm text-gray-600"><strong>Species:</strong> {fields.species}</p>
-                                  {obj.data.reward && <p className="text-sm text-gray-600"><strong>Reward:</strong> {obj.data.reward}</p>}
-                                </div>
+                                  <p className="text-sm text-gray-600"><strong>Name:</strong> {typeof fields.name === 'string' ? fields.name : 'Unknown'}</p>
+                                  <p className="text-sm text-gray-600"><strong>Species:</strong> {typeof fields.species === 'string' ? fields.species : 'Unknown'}</p>
+                                  {obj.data && 'reward' in obj.data && <p className="text-sm text-gray-600"><strong>Reward:</strong> {obj.data.reward as string}</p>}
+                                  </div>
                               </div>
                               <div className="flex space-x-4">
-                                <button className="btn btn-danger" onClick={() => handleClaimReward(fields.id)}>
+                                <button className="btn btn-danger" onClick={() => handleClaimReward(fields.id as {id:string})}>
                                   Claim
                                 </button>
-                                <button className="btn btn-danger" onClick={() => handleAbandonNft(fields.id)}>
+                                <button className="btn btn-danger" onClick={() => handleAbandonNft(fields.id as {id:string})}>
                                   Abandon
                                 </button>
                               </div>
@@ -341,7 +345,7 @@ export default function Home() {
           </div>
         )}
       </main>
-  
+
       {showBuyModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
           <div className="bg-white p-8 rounded-lg">
@@ -359,7 +363,7 @@ export default function Home() {
           </div>
         </div>
       )}
-  
+
       {showSellModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
           <div className="bg-white p-8 rounded-lg">

@@ -1,8 +1,11 @@
 import { OBJECT_IDS } from "@/config/constants";
-import { SuiObjectResponse } from "@mysten/sui/client";
+import { SuiObjectData, SuiObjectResponse } from "@mysten/sui/client";
 import { suiClient } from "@/config";
 import { isValidSuiAddress } from "@mysten/sui/utils";
 
+interface SuiObjectDataWithReward extends SuiObjectData {
+  reward: string;
+}
 export interface CategorizedObjects {
   coins: {
     [coinType: string]: SuiObjectResponse[];
@@ -43,7 +46,9 @@ export const categorizeSuiObjects = (objects: SuiObjectResponse[]): CategorizedO
     }
     
     if (obj.data && obj.data.objectId) {
-      obj.data.reward = getFormatBalance(obj.data.objectId);
+       getFormatBalance(obj.data.objectId).then((result)=>{
+        (obj.data as SuiObjectDataWithReward).reward = result;
+      });
     }
     return acc;
   }, { coins: {}, objects: {} });
