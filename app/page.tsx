@@ -336,7 +336,7 @@ export default function Home() {
           </div>
         ) : (
           <div className="flex-grow flex flex-col items-center p-8">
-            <h1 className="text-4xl font-bold text-white mb-8">Welcome to Animal Crossing</h1>
+            <h1 className="text-4xl font-bold text-white mb-8">Welcome to Animal Conservation</h1>
             <h3 className="text-2xl font-bold text-white mb-8">Please connect your wallet to view your assets</h3>
           </div>
         )}

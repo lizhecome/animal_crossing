@@ -26,6 +26,8 @@ const ERR_CANNOT_BURN_MORE_THAN_CIRCULATING_SUPPLY: u64 = 5;
 const ERR_INSUFFICIENT_BALANCE: u64 = 6;
 const ERR_CANNOT_SWAP_MORE_THAN_CIRCULATING_SUPPLY: u64 = 7;
 const ERR_INSUFFICIENT_REWARD_BALANCE: u64 = 8;
+const ERR_INSUFFICIENT_DONATION_BALANCE: u64 = 9;
+
 
 
 const TOTAL_SUPPLY: u64 = 10_000_000_000_000_000_000;
@@ -175,6 +177,23 @@ public fun withdraw_sui_from_reward(
 
     // Split the balance to get the specified amount
     let withdrawn_coin = coin::take(&mut vault.reward_sui_blance, amount, ctx);
+
+    // Transfer the withdrawn SUI coin to the recipient
+    transfer::public_transfer(withdrawn_coin, recipient);
+}
+
+public fun withdraw_donation_balance(
+    _: &WILD_COIN_AdminCap,
+    vault: &mut WildVault,
+    amount: u64,
+    recipient: address,
+    ctx: &mut TxContext
+) {
+    // Ensure the amount to be withdrawn does not exceed the available donation balance
+    assert!(vault.donation_balance.value() >= amount, ERR_INSUFFICIENT_DONATION_BALANCE);
+
+    // Split the balance to get the specified amount
+    let withdrawn_coin = coin::take(&mut vault.donation_balance, amount, ctx);
 
     // Transfer the withdrawn SUI coin to the recipient
     transfer::public_transfer(withdrawn_coin, recipient);
@@ -373,6 +392,18 @@ public(package) fun distribute_airdrop(
 ) {
     // Calculate the total amount of SUI to be distributed
     let total_reward = vault.reward_sui_blance.value();
+    // Calculate the donation amount (20% of total reward)
+    let donation_amount = total_reward * 20 / 100;
+
+    // Calculate the remaining amount for distribution (80% of total reward)
+    let distribution_amount = total_reward - donation_amount;
+
+    // Withdraw the donation amount from the vault and add it to the donation balance
+    let donation_coin = withdraw_sui_from_vault(vault, donation_amount, ctx);
+    balance::join(&mut vault.donation_balance, coin::into_balance(donation_coin));
+
+    // Update the total reward to reflect the remaining amount for distribution
+    let total_reward = distribution_amount;
 
     // Iterate over the airdrop table to distribute the SUI
     let mut front_item = linked_table::front(airdrop_table);
