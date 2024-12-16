@@ -1,6 +1,9 @@
 /// Module: animal_crossing
 module animal_crossing::wild_NFT;
 
+use protocol::market::{Market};
+use protocol::version::{Version};
+
 use animal_crossing::wild_coin::{Self,WildVault};
 use std::string::{String, utf8};
 use sui::coin::{Self, Coin};
@@ -11,12 +14,8 @@ use sui::transfer::Receiving;
 use sui::table::{Self, Table};
 use sui::clock::{Self,Clock};
 use sui::sui::SUI;
-use lending_core::incentive::{Incentive as IncentiveV1};
-use lending_core::incentive_v2::Incentive;
-use lending_core::pool::{Pool};
-use lending_core::storage::{Storage};
 use sui::linked_table::{Self,LinkedTable};
-use oracle::oracle::{PriceOracle};
+
 
 // Error code indicating that the NFT price must be exactly equal to the specified WILD_COIN amount.
 const ERR_NFT_PRICE_IS_EXACTLY_NFT_PRICE_WILD_COIN: u64 = 5;
@@ -26,7 +25,7 @@ const ERR_KEY_DOES_NOT_EXIST: u64 = 1;
 
 // The price of the NFT in WILD_COIN, set to 1 billion (10^9) WILD_COIN.
 const NFT_PRICE: u64 = 1_000_000_000;
-
+//const NFT_PRICE: u64 = 10;
 
 public struct WILD_NFT has drop {}
 /// List of precious animals, containing AnimalInfo
@@ -196,17 +195,15 @@ public fun update_animal_info(
 /// https://github.com/naviprotocol/navi-sdk/blob/692a001f174a758544accfa05459f1edc8366c89/src/address.ts#L58
 /// Fund function to purchase NFT using inputcoin: Coin<WILD_COIN>, priced at NFT_PRICE
 public fun fund_and_purchase_nft(
+    scallop_version: &Version,
+    scallop_market: &mut Market,
     animals: &Animals,
     key: u64, // key of animal_infos
     record: & mut MintRecord,
     inputcoin: Coin<wild_coin::WILD_COIN>,
     recipient: address,
     clock: &Clock,
-    storage: &mut Storage,
-    pool_sui: &mut Pool<SUI>,
     vault: &mut WildVault,
-    inc_v1: &mut IncentiveV1,
-    inc_v2: &mut Incentive,
     ctx: &mut TxContext,
 ) {
     // Verify payment amount
@@ -227,7 +224,7 @@ public fun fund_and_purchase_nft(
         create_time: clock::timestamp_ms(clock),
     };
     let coin_sui = wild_coin::withdraw_sui_from_vault(vault,NFT_PRICE,ctx);
-    wild_coin::deposit_sui_to_lending_platform(clock,storage,pool_sui,vault,coin_sui,inc_v1,inc_v2);
+    wild_coin::deposit_sui_to_lending_platform(scallop_version,scallop_market,coin_sui,clock,vault,ctx);
     
     // 将inputcoin存入vault
     wild_coin::deposit_wild_coin(vault, inputcoin);
@@ -260,15 +257,12 @@ public fun fund_and_purchase_nft(
 // The function also withdraws the equivalent amount of SUI from the lending platform.
 // Finally, the NFT is destroyed.
 public fun abandon_adoption(
+    version: &Version,
+    market: &mut Market,
     nft: AnimalNFT,
     vault: &mut WildVault,
     record: & mut MintRecord,
-    storage: &mut Storage,
-    pool_sui: &mut Pool<SUI>,
-    inc_v1: &mut IncentiveV1,
-    inc_v2: &mut Incentive,
     clock: &Clock,
-    oracle: &PriceOracle,
     recipient: address,
     ctx: &mut TxContext
 ) {
@@ -302,7 +296,9 @@ public fun abandon_adoption(
         }
     };
     record.count = record.count - 1;
-    wild_coin::withdraw_sui_from_lending_platform(vault,NFT_PRICE,storage,pool_sui,inc_v1,inc_v2,clock,oracle,ctx);
+    let scoin_amount = wild_coin::calc_coin_to_scoin(version,market,std::type_name::get<SUI>(),clock,NFT_PRICE);
+    let scoin = wild_coin::withdraw_scoin_from_vault(vault, scoin_amount, ctx);
+    wild_coin::withdraw_sui_from_lending_platform(version,market,scoin,clock,vault,ctx);
     
     // Destroy the NFT
     let AnimalNFT {
@@ -344,6 +340,8 @@ public struct Nft_weight has store,drop{
 /// @param ctx The transaction context.
 public fun calculate_send_airdrop_distribution(
     _: &NFTAdminCap,
+    version: &Version,
+    market: &mut Market,
     record: &MintRecord,
     animals: &Animals,
     vault: &mut WildVault,
@@ -403,7 +401,7 @@ public fun calculate_send_airdrop_distribution(
         front_item = linked_table::next(&nft_weights, *nft_id);
     };
 
-    wild_coin::distribute_airdrop(&airdrop_table, vault, ctx);
+    wild_coin::distribute_airdrop(version,market,clock,&airdrop_table, record.count, NFT_PRICE,vault, ctx);
     linked_table::drop(airdrop_table);
     linked_table::drop(nft_weights);
 }
@@ -424,3 +422,8 @@ public fun get_airdrop(
     let coin = transfer::public_receive<Coin<SUI>>(&mut nft.id, to_recive);
     transfer::public_transfer(coin, recipient)
 }
+
+
+
+
+

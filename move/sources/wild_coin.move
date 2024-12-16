@@ -1,20 +1,15 @@
 module animal_crossing::wild_coin;
+use protocol::reserve::MarketCoin;
+use protocol::market::{Market};
+use protocol::version::{Version};
+use protocol::redeem;
 
-use lending_core::account::AccountCap;
-use lending_core::incentive::Incentive as IncentiveV1;
-use lending_core::incentive_v2::{IncentiveFundsPool,Incentive};
-use lending_core::lending;
-// use lending_core::logic;
-use lending_core::pool::Pool;
-use lending_core::storage::Storage;
-// use lending_core::version;
 use sui::balance::{Self, Balance};
 use sui::coin::{Self, TreasuryCap, Coin};
 use sui::sui::SUI;
 use sui::transfer::share_object;
 use sui::clock::{Clock};
 use sui::linked_table::{Self,LinkedTable};
-use oracle::oracle::{PriceOracle};
 
 public struct WILD_COIN has drop {}
 
@@ -27,7 +22,7 @@ const ERR_INSUFFICIENT_BALANCE: u64 = 6;
 const ERR_CANNOT_SWAP_MORE_THAN_CIRCULATING_SUPPLY: u64 = 7;
 const ERR_INSUFFICIENT_REWARD_BALANCE: u64 = 8;
 const ERR_INSUFFICIENT_DONATION_BALANCE: u64 = 9;
-
+const ERR_INSUFFICIENT_SCOIN_BALANCE: u64 = 10;
 
 
 const TOTAL_SUPPLY: u64 = 10_000_000_000_000_000_000;
@@ -44,9 +39,7 @@ public struct WildVault has key {
     wild_coin_balance: Balance<WILD_COIN>, // Use Balance type to store WILD_COIN
     reward_sui_blance:Balance<SUI>,
     donation_balance: Balance<SUI>, // Use Balance type to store SUI donations
-    account_cap: AccountCap,
-    sui_index: u8,
-    usdc_index: u8,
+    scoin_balance:Balance<MarketCoin<SUI>>,
 }
 
 // Define admin capability identifier
@@ -71,9 +64,7 @@ fun init(witness: WILD_COIN, ctx: &mut TxContext) {
         wild_coin_balance: balance::zero<WILD_COIN>(),
         reward_sui_blance: balance::zero<SUI>(),
         donation_balance: balance::zero<SUI>(),
-        account_cap: lending::create_account(ctx),
-        sui_index: 0,
-        usdc_index: 1,
+        scoin_balance:balance::zero<MarketCoin<SUI>>()
     };
     let supply = Wild_Supply {
         id: object::new(ctx),
@@ -251,18 +242,21 @@ public(package) fun burn_wild_coin(
 // @param inc_v1 The incentive V1 for the lending platform.
 // @param inc_v2 The incentive V2 for the lending platform.
 public(package) fun deposit_sui_to_lending_platform(
-    clock: &Clock,
-    storage: &mut Storage,
-    pool_a: &mut Pool<SUI>,
-    vault: & WildVault,
+    scallop_version: &Version,
+    scallop_market: &mut Market,
     deposit_coin: Coin<SUI>,
-    inc_v1: &mut IncentiveV1,
-    inc_v2: &mut Incentive,) {
-        lending_core::incentive_v2::deposit_with_account_cap<SUI>(clock, storage, pool_a, vault.sui_index, deposit_coin, inc_v1, inc_v2, &vault.account_cap);
+    clock: &Clock,
+    vault: &mut WildVault,
+    ctx: &mut TxContext) {
+    let minted_coin = protocol::mint::mint<SUI>(
+        scallop_version,
+        scallop_market,
+        deposit_coin,
+        clock,
+        ctx,
+    );
+    deposit_scoin_to_vault(vault, minted_coin);
 }
-
-// Withdraws SUI from the lending platform and deposits it into the vault.
-// 
 // This function ensures that the specified amount of SUI is withdrawn from the lending platform and deposited into the vault's SUI balance.
 // 
 // @param vault The vault containing the SUI balance.
@@ -275,20 +269,14 @@ public(package) fun deposit_sui_to_lending_platform(
 // @param oracle The price oracle for SUI.
 // @param ctx The transaction context.
 public(package) fun withdraw_sui_from_lending_platform(
-    vault: & mut WildVault,
-    sui_withdraw_amount: u64,
-    storage: &mut Storage,
-    pool_sui: &mut Pool<SUI>,
-    inc_v1: &mut IncentiveV1,
-    inc_v2: &mut Incentive,
+    version: &Version,
+    market: &mut Market,
+    scoin: Coin<MarketCoin<SUI>>,
     clock: &Clock,
-    oracle: &PriceOracle,
+    vault: & mut WildVault,
     ctx: &mut TxContext
 ){
-    let withdrawn_balance = lending_core::incentive_v2::withdraw_with_account_cap(
-        clock, oracle, storage, pool_sui, vault.sui_index, sui_withdraw_amount, inc_v1, inc_v2, &vault.account_cap
-    );
-    let withdrawn_coin = coin::from_balance(withdrawn_balance, ctx);
+    let withdrawn_coin = protocol::redeem::redeem<SUI>(version, market, scoin, clock, ctx);
     deposit_sui_to_vault(vault, withdrawn_coin);
 }
 
@@ -300,41 +288,50 @@ public(package) fun deposit_sui_to_vault(
     balance::join(&mut vault.sui_balance, coin::into_balance(deposit_coin));
 }
 
+public(package) fun deposit_scoin_to_vault(    vault: &mut WildVault,
+    deposit_scoin: Coin<MarketCoin<SUI>>,){
+    balance::join(&mut vault.scoin_balance, coin::into_balance(deposit_scoin));
+}
+public(package) fun withdraw_scoin_from_vault(
+    vault: &mut WildVault,
+    withdraw_amount: u64,
+    ctx: &mut TxContext
+): Coin<MarketCoin<SUI>> {
+    // Ensure the withdrawal amount does not exceed the available balance
+    assert!(balance::value(&vault.scoin_balance) >= withdraw_amount, ERR_INSUFFICIENT_BALANCE);
+
+    // Split the scoin balance to get the specified amount
+    let withdrawn_scoin_balance= balance::split(&mut vault.scoin_balance, withdraw_amount);
+
+    // Convert the withdrawn balance to a coin
+    let withdrawn_scoin = coin::from_balance(withdrawn_scoin_balance, ctx);
+
+    withdrawn_scoin
+}
+
+
+
 /// Claims rewards from the lending platform and deposits them into the vault.
 /// 
 /// This function ensures that the rewards are claimed from the lending platform and deposited into the vault's reward balance.
-/// 
-/// @param vault The vault containing the SUI reward balance.
-/// @param clock The clock to get the current timestamp.
-/// @param storage The storage for the lending platform.
-/// @param pool_sui The incentive funds pool for SUI.
-/// @param inc_v2 The incentive for the lending platform.
-/// @param ctx The transaction context.
-public fun claim_reward_from_lending_platform(
-    _: &WILD_COIN_AdminCap,
+public(package) fun claim_reward_from_lending_platform(
+    version: &Version,
+    market: &mut Market,
+    nft_bind_sui_amount:u64,
     clock: &Clock,
-    storage: &mut Storage,
-    pool_sui: &mut IncentiveFundsPool<SUI>,
     vault: &mut WildVault,
-    inc_v2: &mut Incentive,
     ctx: &mut TxContext
 ) {
-    // Claim the reward from the lending platform
-    let reward_balance = lending_core::incentive_v2::claim_reward_with_account_cap<SUI>(
-        clock, 
-        inc_v2, 
-        pool_sui, 
-        storage, 
-        vault.sui_index, 
-        0, 
-        &vault.account_cap
-    );
-
-    // Convert the reward balance to a coin
-    let reward_coin = coin::from_balance(reward_balance, ctx);
-
-    // Deposit the reward coin into the vault
-    deposit_reward_sui_to_vault(vault, reward_coin);
+    let all_scion_amount = balance::value(&vault.scoin_balance);
+    let nft_bind_scion = calc_coin_to_scoin(version, market, std::type_name::get<SUI>(), clock, nft_bind_sui_amount);
+    assert!(all_scion_amount >= nft_bind_scion, ERR_INSUFFICIENT_SCOIN_BALANCE);
+    if(all_scion_amount > nft_bind_scion){
+        let scoin = withdraw_scoin_from_vault(vault,all_scion_amount - nft_bind_scion,ctx);
+        let sui_coin = redeem::redeem(version, market, scoin, clock, ctx);
+        // Comment: Deposit the amount into the reward account
+        deposit_reward_sui_to_vault(vault, sui_coin); 
+    }
+    
 }
 
 /// Deposits a specified amount of SUI into the vault's reward balance.
@@ -401,10 +398,19 @@ public(package) fun withdraw_sui_from_vault_reward(
 /// @param vault The vault containing the SUI reward balance.
 /// @param ctx The transaction context.
 public(package) fun distribute_airdrop(
+    version: &Version,
+    market: &mut Market,
+    clock: &Clock,
     airdrop_table: &LinkedTable<ID, u64>,
+    nft_count:u64,
+    unit:u64,
     vault: &mut WildVault,
     ctx: &mut TxContext
 ) {
+    let amount = nft_count * unit;
+
+    claim_reward_from_lending_platform(version,market,amount,clock,vault,ctx);
+
     // Calculate the total amount of SUI to be distributed
     let total_reward = vault.reward_sui_blance.value();
     // Calculate the donation amount (20% of total reward)
@@ -445,3 +451,71 @@ public(package) fun distribute_airdrop(
     }
 }
 
+
+  public(package) fun calc_coin_to_scoin(
+    version: &protocol::version::Version,
+    market: &mut protocol::market::Market, 
+    coin_type: std::type_name::TypeName, 
+    clock: &sui::clock::Clock,
+    coin_amount: u64
+  ): u64 {
+    let (cash, debt, revenue, market_coin_supply) = get_reserve_stats(version, market, coin_type, clock);
+
+    let scoin_amount = if (market_coin_supply > 0) {
+      math::u64::mul_div(
+        coin_amount,
+        market_coin_supply,
+        cash + debt - revenue
+      )
+    } else {
+      coin_amount
+    };
+
+    // if the coin is too less, just throw error
+    assert!(scoin_amount > 0, 1);
+    
+    scoin_amount
+  }
+
+
+  fun calc_scoin_to_coin(
+    version: &protocol::version::Version,
+    market: &mut protocol::market::Market, 
+    coin_type: std::type_name::TypeName, 
+    clock: &sui::clock::Clock,
+    scoin_amount: u64
+  ): u64 {
+    let (cash, debt, revenue, market_coin_supply) = get_reserve_stats(version, market, coin_type, clock);
+    
+    let coin_amount = math::u64::mul_div(
+      scoin_amount,
+      cash + debt - revenue,
+      market_coin_supply
+    );
+
+    coin_amount
+  }
+
+
+
+  fun get_reserve_stats(
+    version: &protocol::version::Version,
+    market: &mut protocol::market::Market,
+    coin_type: std::type_name::TypeName,
+    clock: &sui::clock::Clock,
+  ): (u64, u64, u64, u64) {
+    // update to the latest reserve stats
+    // NOTE: this function needs to be called to get an accurate data
+    protocol::accrue_interest::accrue_interest_for_market(
+      version,
+      market,
+      clock
+    );
+
+    let vault = protocol::market::vault(market);
+    let balance_sheets = protocol::reserve::balance_sheets(vault);
+
+    let balance_sheet = x::wit_table::borrow(balance_sheets, coin_type);
+    let (cash, debt, revenue, market_coin_supply) = protocol::reserve::balance_sheet(balance_sheet);
+    (cash, debt, revenue, market_coin_supply)
+  }

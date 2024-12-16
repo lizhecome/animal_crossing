@@ -98,20 +98,19 @@ export async function adoptNft(
         }
         
         const amountInToken = Math.floor(1 * 1_000_000_000);
+        //const amountInToken = Math.floor(1 * 10);
         const splitCoin = tx.splitCoins(tx.object(id_list[0]), [amountInToken]);
         tx.moveCall({
             arguments: [
+                tx.object(OBJECT_IDS.scallop_Version),
+                tx.object(OBJECT_IDS.scallop_Market),
                 tx.object(OBJECT_IDS.Animals),
                 tx.pure.u64(key),
                 tx.object(OBJECT_IDS.MintRecord),
                 splitCoin,
                 tx.pure.address(accountAddress),
                 tx.object(OBJECT_IDS.clock),
-                tx.object(OBJECT_IDS.storage),
-                tx.object(OBJECT_IDS.pool_sui),
                 tx.object(OBJECT_IDS.WildVault),
-                tx.object(OBJECT_IDS.inc_v1),
-                tx.object(OBJECT_IDS.inc_v2),
             ],
             target: `${OBJECT_IDS.package_id}::wild_NFT::fund_and_purchase_nft`,
         });
@@ -150,15 +149,12 @@ export async function abandonNft(
     try {
         tx.moveCall({
             arguments: [
+                tx.object(OBJECT_IDS.scallop_Version),
+                tx.object(OBJECT_IDS.scallop_Market),
                 tx.object(nftid.id),
                 tx.object(OBJECT_IDS.WildVault),
                 tx.object(OBJECT_IDS.MintRecord),
-                tx.object(OBJECT_IDS.storage),
-                tx.object(OBJECT_IDS.pool_sui),
-                tx.object(OBJECT_IDS.inc_v1),
-                tx.object(OBJECT_IDS.inc_v2),
                 tx.object(OBJECT_IDS.clock),
-                tx.object(OBJECT_IDS.PriceOracle),
                 tx.pure.address(accountAddress),
             ],
             target: `${OBJECT_IDS.package_id}::wild_NFT::abandon_adoption`,

@@ -2,12 +2,26 @@
 
 [move]
 version = 3
-manifest_digest = "BD6D1A32576E0BA4C5CE0FC56AE987CA176BADF59F9103FCB33A55A526E427BA"
-deps_digest = "060AD7E57DFB13104F21BE5F5C3759D03F0553FC3229247D9A7A6B45F50D03A3"
+manifest_digest = "E2557E1FF072710E38379D34475B81BBBF90AF528FD2A854631D1557D9580D42"
+deps_digest = "F8BBB0CCB2491CA29A3DF03D6F92277A4F3574266507ACD77214D37ECA3F3082"
+dependencies = [
+  { id = "ScallopProtocol", name = "ScallopProtocol" },
+]
+
+[[move.package]]
+id = "CoinDecimalsRegistry"
+source = { git = "https://github.com/scallop-io/sui-lending-protocol.git", rev = "main", subdir = "contracts/libs/coin_decimals_registry" }
+
 dependencies = [
   { id = "Sui", name = "Sui" },
-  { id = "lending_core", name = "lending_core" },
-  { id = "oracle", name = "oracle" },
+]
+
+[[move.package]]
+id = "Math"
+source = { git = "https://github.com/scallop-io/sui-lending-protocol.git", rev = "main", subdir = "contracts/libs/math" }
+
+dependencies = [
+  { id = "Sui", name = "Sui" },
 ]
 
 [[move.package]]
@@ -15,12 +29,16 @@ id = "MoveStdlib"
 source = { git = "https://github.com/MystenLabs/sui.git", rev = "mainnet", subdir = "crates/sui-framework/packages/move-stdlib" }
 
 [[move.package]]
-id = "Pyth"
-source = { git = "https://github.com/naviprotocol/pyth-crosschain.git", rev = "navi-forked", subdir = "target_chains/sui/contracts" }
+id = "ScallopProtocol"
+source = { git = "https://github.com/scallop-io/sui-lending-protocol.git", rev = "main", subdir = "contracts/protocol" }
 
 dependencies = [
+  { id = "CoinDecimalsRegistry", name = "CoinDecimalsRegistry" },
+  { id = "Math", name = "Math" },
   { id = "Sui", name = "Sui" },
-  { id = "Wormhole", name = "Wormhole" },
+  { id = "Whitelist", name = "Whitelist" },
+  { id = "X", name = "X" },
+  { id = "XOracle", name = "XOracle" },
 ]
 
 [[move.package]]
@@ -32,78 +50,31 @@ dependencies = [
 ]
 
 [[move.package]]
-id = "SupraOracle"
-source = { git = "https://github.com/naviprotocol/dora-interface.git", rev = "main", subdir = "sui/mainnet/supra_holder" }
-
-dependencies = [
-  { id = "Sui", name = "Sui" },
-  { id = "supra_validator", name = "supra_validator" },
-]
-
-[[move.package]]
-id = "Wormhole"
-source = { git = "https://github.com/naviprotocol/wormhole.git", rev = "navi-forked", subdir = "sui/wormhole" }
+id = "Whitelist"
+source = { git = "https://github.com/scallop-io/sui-lending-protocol.git", rev = "main", subdir = "contracts/libs/whitelist" }
 
 dependencies = [
   { id = "Sui", name = "Sui" },
 ]
 
 [[move.package]]
-id = "lending_core"
-source = { git = "https://github.com/naviprotocol/protocol-interface.git", rev = "main", subdir = "lending_core" }
-
-dependencies = [
-  { id = "Sui", name = "Sui" },
-  { id = "math", name = "math" },
-  { id = "oracle", name = "oracle" },
-  { id = "utils", name = "utils" },
-]
-
-[[move.package]]
-id = "math"
-source = { git = "https://github.com/naviprotocol/protocol-interface.git", rev = "main", subdir = "math" }
+id = "X"
+source = { git = "https://github.com/scallop-io/sui-lending-protocol.git", rev = "main", subdir = "contracts/libs/x" }
 
 dependencies = [
   { id = "Sui", name = "Sui" },
 ]
 
 [[move.package]]
-id = "oracle"
-source = { git = "https://github.com/naviprotocol/protocol-interface.git", rev = "main", subdir = "oracle" }
-
-dependencies = [
-  { id = "Pyth", name = "Pyth" },
-  { id = "Sui", name = "Sui" },
-  { id = "SupraOracle", name = "SupraOracle" },
-]
-
-[[move.package]]
-id = "supra_utils"
-source = { git = "https://github.com/naviprotocol/dora-interface.git", rev = "main", subdir = "sui/mainnet/supra_utils" }
-
-dependencies = [
-  { id = "Sui", name = "Sui" },
-]
-
-[[move.package]]
-id = "supra_validator"
-source = { git = "https://github.com/naviprotocol/dora-interface.git", rev = "main", subdir = "sui/mainnet/supra_validator" }
-
-dependencies = [
-  { id = "Sui", name = "Sui" },
-  { id = "supra_utils", name = "supra_utils" },
-]
-
-[[move.package]]
-id = "utils"
-source = { git = "https://github.com/naviprotocol/protocol-interface.git", rev = "main", subdir = "utils" }
+id = "XOracle"
+source = { git = "https://github.com/scallop-io/sui-lending-protocol.git", rev = "main", subdir = "contracts/sui_x_oracle/x_oracle" }
 
 dependencies = [
   { id = "Sui", name = "Sui" },
 ]
 
 [move.toolchain-version]
-compiler-version = "1.37.2"
+compiler-version = "1.39.1"
 edition = "2024.beta"
 flavor = "sui"
 
@@ -111,6 +82,6 @@ flavor = "sui"
 
 [env.mainnet]
 chain-id = "35834a8a"
-original-published-id = "0xc199500bcbe51fb99480853d14009cbf603fe9ebff3851bd8976b95a535ba25b"
-latest-published-id = "0xc199500bcbe51fb99480853d14009cbf603fe9ebff3851bd8976b95a535ba25b"
+original-published-id = "0xc2b402278770049435fc0550a6f2204eaaa34b460524b6bd54a395585dfadb35"
+latest-published-id = "0xc2b402278770049435fc0550a6f2204eaaa34b460524b6bd54a395585dfadb35"
 published-version = "1"

@@ -261,7 +261,7 @@ export default function Home() {
                   <p className="text-lg text-gray-600">{nftMintCount}</p>
                 </div>
                 <div className="flex-1 p-4 card-bg">
-                  <h3 className="text-xl font-semibold mb-2 text-gray-700">Current Reward Amount</h3>
+                  <h3 className="text-xl font-semibold mb-2 text-gray-700">Current scoin Amount</h3>
                   <p className="text-lg text-gray-600">{currentRewardAmount}</p>
                 </div>
               </div>
@@ -346,7 +346,7 @@ export default function Home() {
           </div>
         ) : (
           <div className="flex-grow flex flex-col items-center p-8">
-            <h1 className="text-4xl font-bold text-white mb-8">Welcome to Animal Conservation</h1>
+            <h1 className="text-4xl font-bold text-white mb-8">Welcome to Wild Guard</h1>
             <h3 className="text-2xl font-bold text-white mb-8">Please connect your wallet to view your assets</h3>
           </div>
         )}

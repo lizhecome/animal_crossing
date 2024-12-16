@@ -6,11 +6,11 @@ export async function getCurrentRewardAmount(): Promise<string> {
     if (response.data && response.data.content && "fields" in response.data.content) {
         const fields = response.data.content.fields as { [key: string]: any };
         const reward_Fields: {
-            reward_sui_blance?: number;
+            scoin_balance?: number;
         } = {
-            reward_sui_blance: fields.reward_sui_blance,
+            scoin_balance: fields.scoin_balance,
         };
-        return reward_Fields.reward_sui_blance?.toString() ?? "0";
+        return reward_Fields.scoin_balance?.toString() ?? "0";
     }
     return "无数据";
   }
