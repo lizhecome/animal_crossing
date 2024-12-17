@@ -38,7 +38,7 @@ sui client call --package $package_id --module wild_NFT  --function fund_and_pur
 
 sui client call --package $package_id --module wild_NFT  --function abandon_adoption --args $scallop_Version $scallop_Market 0x10878d30b6be0fe49be6e6ef33c49ef57846104e718f40a4fff7b522a841a996 $WildVault $MintRecord $clock $recipient --gas-budget=1000000000
 
-sui client call --package $package_id --module wild_coin  --function deposit_sui_coin_to_reward --args $WILD_COIN_AdminCap $WildVault 0x6dc3f54298d8e93dcc2db3e1a640971a479824de4860c30e1fea0efea6e3825e --gas-budget=1000000000
+sui client call --package $package_id --module wild_coin  --function deposit_sui_coin_to_reward --args $WILD_COIN_AdminCap $WildVault 0x20a5be5cfca95476b56987266a695712771fedd683e405010b9bdf52eee02e97 --gas-budget=1000000000
 
 sui client call --package $package_id --module wild_NFT --function calculate_send_airdrop_distribution --args $NFTAdminCap $scallop_Version $scallop_Market $MintRecord $Animals $WildVault $clock --gas-budget=1000000000
 
