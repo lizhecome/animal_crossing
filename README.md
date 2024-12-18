@@ -1,5 +1,5 @@
 # Project Introduction: DeFi for Wildlife Conservation
-Visit our [WildGuard Homepage](https://wildguard.jellycloud.vip/) to connect your wallet and view your assets.
+Visit our [WildGuard Homepage](https://animal-crossing-mocha.vercel.app/) to connect your wallet and view your assets.
 
 
 ![screenshot](https://raw.githubusercontent.com/lizhecome/animal_crossing/refs/heads/main/screenshot.png)
